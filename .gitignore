@@ -1,0 +1,26 @@
+# ==========================================================
+#  .gitignore — Visual Studio / C# / .NET
+#  Ignora TODO lo generado. NO ignora código fuente (.cs,
+#  .xaml), ni .sln, .csproj, App.config ni README.
+# ==========================================================
+
+# Salidas de compilación
+bin/
+obj/
+
+# Estado y caché de Visual Studio
+.vs/
+*.suo
+*.user
+*.cache
+
+# ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+# Paquetes NuGet restaurados
+packages/
+
+# Otros temporales
+*.tmp
+*.log
