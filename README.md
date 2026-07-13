@@ -1,114 +1,160 @@
-# Sistema de Préstamo de Equipos
+# Sistema de Préstamo de Equipos (WinForms, MVP)
 
-Aplicación de escritorio en **C# / WinForms / .NET Framework 4.7.2** que permite
-registrar equipos y usuarios, prestar equipos, registrar devoluciones y consultar
-el historial. El objetivo es demostrar el patrón **MVP (Model-View-Presenter)** y
-los **principios SOLID** con un código sencillo y fácil de explicar.
+Aplicación de escritorio para llevar el control de préstamos de equipos: registrar
+equipos y usuarios, prestar un equipo a una persona, registrar su devolución y
+consultar el historial. La regla que sostiene todo lo demás es que un mismo equipo
+no puede estar prestado a dos personas a la vez.
 
-No usa ninguna librería externa ni paquete NuGet: solo el framework base. Los datos
-se guardan **en memoria** durante la ejecución (con datos de prueba precargados).
+## Contexto
 
----
+Es un trabajo de la asignatura Ingeniería del Conocimiento (cuatrimestre 7). El
+objetivo no era entregar un producto listo para producción, sino mostrar una
+separación de capas limpia y los principios SOLID sobre un caso pequeño y fácil de
+seguir.
 
-## Cómo abrir y ejecutar
+Existe una versión gemela del mismo sistema resuelta con WPF y el patrón MVVM, para
+comparar cómo cambia solo la capa de presentación cuando el dominio se mantiene
+igual: https://github.com/PXLARIZEDL/PrestamoEquiposMVVM
 
-1. Abrir `PrestamoEquipos.sln` con **Visual Studio 2019 o 2022**.
-2. Presionar **F5** (o el botón Iniciar).
+## Tecnologías
 
-No hay que instalar nada más ni configurar cadenas de conexión.
+- C#
+- .NET Framework 4.7.2
+- WinForms
 
----
+No depende de paquetes NuGet ni de librerías externas. Solo el framework base.
 
-## Arquitectura por capas
+## Cómo ejecutarlo
+
+Requisitos: Visual Studio 2022 con la carga de trabajo de escritorio .NET y
+.NET Framework 4.7.2 instalado.
+
+1. Abrir `PrestamoEquipos.sln`.
+2. Ejecutar con F5.
+
+No hay cadenas de conexión ni configuración previa. Al arrancar, el
+`ContenedorDependencias` precarga tres equipos y tres usuarios de ejemplo para poder
+probar de inmediato.
+
+## Funcionalidad
+
+- Registrar equipos (nombre y código).
+- Registrar usuarios (nombre y matrícula).
+- Prestar un equipo a un usuario.
+- Registrar la devolución de un préstamo activo.
+- Ver los préstamos activos y el historial completo con su estado.
+
+La regla de negocio principal vive en `PrestamoService.RegistrarPrestamo`: antes de
+crear el préstamo consulta si el equipo ya tiene uno activo y, si lo tiene, no lo
+registra y devuelve un mensaje explicando a quién está prestado. La devolución
+(`RegistrarDevolucion`) marca la fecha de devolución y vuelve a dejar el equipo
+disponible.
+
+## Arquitectura
+
+El proyecto está dividido en capas y la dependencia siempre apunta hacia abajo, y
+siempre a través de interfaces. Un formulario no conoce un repositorio concreto; lo
+alcanza pasando por su presentador, el servicio y la interfaz del repositorio.
 
 ```
-  Formularios (WinForms)        <- solo dibujan y disparan eventos (la Vista)
-        | implementan
+  Formularios (WinForms)         solo dibujan y disparan eventos
+        | implementan IEquipoView / IUsuarioView / IPrestamoView
         v
-  Vistas (interfaces IxxxView)  <- contrato entre Vista y Presenter
+  Presentadores                  la lógica de cada pantalla
         |
         v
-  Presentadores (Presenters)    <- la logica de cada pantalla
+  Servicios (PrestamoService)    reglas de negocio
         |
         v
-  Servicios (reglas de negocio) <- ej: "un equipo no se presta dos veces"
+  Repositorios                   almacenamiento (en memoria)
         |
         v
-  Repositorios (almacenamiento) <- guardan y consultan datos (en memoria)
-        |
-        v
-  Modelos (Usuario, Equipo, Prestamo)
+  Modelos (Equipo, Usuario, Prestamo)
 ```
 
-El **ContenedorDependencias** (Composition Root) es el único lugar donde se crean
-las clases concretas y se conectan con sus interfaces. Todo lo demás depende de
-abstracciones.
+Las flechas cruzan siempre por una interfaz: los formularios implementan
+`IEquipoView`, `IUsuarioView` e `IPrestamoView`; los presentadores y el servicio
+reciben `IEquipoRepositorio`, `IUsuarioRepositorio`, `IPrestamoRepositorio` e
+`IPrestamoService`. Ninguna capa instancia a otra directamente. Eso lo hace un solo
+lugar, el `ContenedorDependencias`.
 
----
+## Estructura del proyecto
 
-## El patrón MVP explicado
+```
+PrestamoEquipos/
+  Modelos/           Entidades del dominio: Equipo, Usuario, Prestamo, IEntidad.
+  Repositorios/      Interfaces de almacenamiento y su implementación en memoria.
+  Servicios/         PrestamoService (reglas), IPrestamoService, Resultado.
+  Vistas/            Interfaces IEquipoView, IUsuarioView, IPrestamoView (contrato del MVP).
+  Presentadores/     EquipoPresenter, UsuarioPresenter, PrestamoPresenter.
+  Formularios/       Los formularios WinForms; cada uno implementa su interfaz de vista.
+  Infraestructura/   ContenedorDependencias (composition root).
+  Program.cs         Punto de entrada.
+```
 
-- **Model**: los modelos (`Usuario`, `Equipo`, `Prestamo`), los repositorios y el
-  servicio. Es "el qué".
-- **View**: cada formulario implementa una interfaz (`IEquipoView`, `IUsuarioView`,
-  `IPrestamoView`). El formulario **no tiene lógica**: solo expone propiedades,
-  dispara eventos al hacer clic, y muestra lo que el presenter le pasa.
-- **Presenter**: recibe la Vista como interfaz, escucha sus eventos, decide qué
-  hacer y le devuelve los datos a mostrar. **Nunca conoce el formulario concreto**,
-  solo la interfaz. Por eso se pudo probar la lógica con "vistas falsas" sin abrir
-  ventanas.
+## Decisiones de diseño
 
-Flujo de un préstamo:
-`Usuario hace clic -> el Form dispara el evento -> el Presenter llama al Servicio ->
-el Servicio aplica la regla -> el Presenter refresca la Vista`.
+Los datos están en memoria y no en una base de datos. Para el alcance del trabajo,
+persistir en SQL no aportaba nada al objetivo, que era la arquitectura. La parte que
+importa es que esa decisión quedó aislada: todo el sistema habla contra
+`IEquipoRepositorio`, `IUsuarioRepositorio` e `IPrestamoRepositorio`, nunca contra la
+clase concreta. Migrar a SQL sería escribir una clase nueva, por ejemplo
+`EquipoRepositorioSql : IEquipoRepositorio`, y cambiar una sola línea en el
+`ContenedorDependencias` para instanciarla en lugar de `EquipoRepositorioEnMemoria`.
+Ni los presentadores, ni el servicio, ni los formularios se enterarían.
 
----
+Todo depende de interfaces y no de clases concretas por esa misma razón. Cuando el
+`PrestamoService` recibe un `IPrestamoRepositorio` por el constructor, no le importa
+si detrás hay una lista en memoria o una tabla; solo le importa el contrato. Eso hace
+que la lógica sea comprobable con una implementación falsa del repositorio sin abrir
+ninguna ventana, y que cambiar una implementación no obligue a tocar a quien la usa.
 
-## Dónde se cumple cada principio SOLID
+El `ContenedorDependencias` existe para tener un único punto donde se arma todo. Es el
+composition root: el único lugar de la aplicación donde aparece la palabra `new`
+seguida de una clase concreta de repositorio o servicio. `Program.cs` lo crea una vez
+y ese mismo contenedor se comparte con todos los formularios, de modo que los datos
+viven durante toda la sesión en lugar de reiniciarse cada vez que se abre una ventana.
 
-| Principio | Dónde | Cómo |
-|---|---|---|
-| **S** - Responsabilidad única | `PrestamoService`, cada Presenter, cada repositorio | El servicio solo tiene reglas de negocio; el presenter solo coordina la pantalla; el repositorio solo almacena; el formulario solo dibuja. |
-| **O** - Abierto/cerrado | `IRepositorio<T>` y `RepositorioEnMemoria<T>` | Para pasar de memoria a SQL se crea `EquipoRepositorioSql : IEquipoRepositorio` **sin modificar** presenters ni servicio. |
-| **L** - Sustitución de Liskov | `RepositorioEnMemoria<T>` y sus hijos | Cualquier implementación de `IEquipoRepositorio` puede reemplazar a otra sin romper el sistema. |
-| **I** - Segregación de interfaces | `IEquipoView`, `IUsuarioView`, `IPrestamoView`, `IPrestamoRepositorio` | Interfaces pequeñas y específicas. La vista de equipos no arrastra métodos de préstamos. |
-| **D** - Inversión de dependencias | Presenters y `PrestamoService` | Dependen de **interfaces**, no de clases concretas. Las concretas se inyectan por el constructor desde el `ContenedorDependencias`. |
+En la capa de presentación opté por el patrón MVP. El formulario no toma decisiones:
+expone propiedades (por ejemplo `NombreEquipo`), dispara eventos cuando el usuario
+pulsa un botón y muestra lo que el presentador le entrega. El presentador recibe la
+vista como interfaz (`IEquipoView`), se suscribe a sus eventos en el constructor y es
+quien decide qué hacer. Por eso un formulario puede cambiar por completo sin tocar la
+lógica: mientras cumpla la interfaz, el presentador sigue funcionando igual.
 
----
+Las operaciones de negocio devuelven un `Resultado` en vez de lanzar excepciones. Un
+préstamo rechazado porque el equipo ya está prestado no es un fallo del programa, es un
+caso normal y esperado. `Resultado.Ok` y `Resultado.Fallo` llevan un booleano y un
+mensaje, y el presentador solo tiene que mostrarlo y refrescar la vista si hubo éxito.
 
-## Estructura de carpetas
+## Principios SOLID
 
-- `Modelos/` - entidades del dominio.
-- `Repositorios/` - interfaces + implementación en memoria.
-- `Servicios/` - reglas de negocio (`PrestamoService`, `Resultado`).
-- `Vistas/` - interfaces de las vistas (contrato del MVP).
-- `Presentadores/` - la lógica de cada pantalla.
-- `Formularios/` - los formularios WinForms (View).
-- `Infraestructura/` - `ContenedorDependencias` (composition root).
+- S (responsabilidad única): `PrestamoService` solo contiene reglas de negocio; cada
+  presentador solo coordina su pantalla; cada repositorio solo almacena; cada
+  formulario solo dibuja.
+- O (abierto/cerrado): pasar de memoria a SQL es crear una clase nueva que implemente
+  `IEquipoRepositorio` (u otra interfaz de repositorio), sin modificar `PrestamoService`
+  ni los presentadores.
+- L (sustitución de Liskov): `EquipoRepositorioEnMemoria` hereda de
+  `RepositorioEnMemoria<Equipo>` y cualquier otra implementación de la interfaz puede
+  ocupar su lugar sin romper a quien la consume.
+- I (segregación de interfaces): las vistas están separadas (`IEquipoView`,
+  `IUsuarioView`, `IPrestamoView`) y `IPrestamoRepositorio` añade solo lo que su cliente
+  necesita (`ObtenerActivos`, `ObtenerPrestamoActivoPorEquipo`), sin cargar a los demás
+  repositorios con esos métodos.
+- D (inversión de dependencias): los presentadores y `PrestamoService` reciben
+  interfaces por el constructor; las clases concretas se crean únicamente en
+  `ContenedorDependencias`.
 
----
+## Limitaciones conocidas
 
-## Posibles preguntas del profesor (y respuesta corta)
+- No hay persistencia. Los datos se guardan en memoria y se pierden al cerrar la
+  aplicación.
+- No hay autenticación ni control de acceso de usuarios.
+- No incluye pruebas automatizadas. La arquitectura las permite (la lógica está
+  desacoplada de la UI), pero no se agregaron en esta entrega.
+- Es un proyecto académico, no un producto de producción.
 
-**¿Por qué no usa base de datos?**
-Es un MVP y el requisito era demostrar arquitectura y SOLID, no persistencia.
-Gracias al patrón repositorio, agregar SQL Server solo implica crear una clase que
-implemente `IEquipoRepositorio`/etc. y cambiar una línea en el
-`ContenedorDependencias`. El resto del código no se toca (OCP + DIP).
+## Autor
 
-**¿Qué es MVP y en qué se diferencia de poner todo en el formulario?**
-En MVP el formulario no decide nada: solo muestra y avisa. La lógica vive en el
-Presenter, que trabaja contra una interfaz de la vista. Permite probar la lógica sin
-la interfaz gráfica y cambiar la UI sin tocar la lógica.
-
-**¿Dónde está la regla de negocio principal?**
-En `PrestamoService.RegistrarPrestamo`: antes de crear el préstamo consulta si el
-equipo ya tiene un préstamo activo; si lo tiene, devuelve `Resultado.Fallo`.
-
-**¿Por qué inyectar por el constructor?**
-Para que cada clase reciba sus dependencias ya listas y dependa de la interfaz, no
-de la implementación.
-
-**¿Por qué `Resultado` en vez de excepciones?**
-Un préstamo rechazado por regla de negocio no es un error del programa, es un caso
-esperado. `Resultado` lo comunica sin usar excepciones para el flujo normal.
+Ricardo Pimentel.
